@@ -1,0 +1,20 @@
+FROM python:3.12-slim
+
+# Nao rodar como root. Se a aplicacao for comprometida, o atacante herda
+# um usuario sem privilegios em vez de dono do container.
+RUN useradd --create-home --shell /bin/bash app
+
+WORKDIR /code
+
+# Copiar so o manifesto primeiro: o Docker cacheia esta camada e so
+# reinstala dependencias quando o pyproject muda, nao a cada edicao de
+# codigo. Economiza minutos por build.
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+
+COPY --chown=app:app . .
+
+USER app
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

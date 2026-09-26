@@ -1,0 +1,39 @@
+# Um comando sobe tudo:  docker compose up
+#
+# Isso importa alem da conveniencia: na gravacao do video voce mostra UM
+# comando em vez de tres terminais. E o avaliador consegue rodar seu
+# projeto sem instalar Python nem Node na maquina dele.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cupcakes
+      POSTGRES_PASSWORD: cupcakes
+      POSTGRES_DB: cupcakes
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # Sem isso, o backend sobe antes do Postgres aceitar conexao e
+      # morre no boot. `depends_on` sozinho so espera o container existir,
+      # nao o servico estar pronto.
+      test: ["CMD-SHELL", "pg_isready -U cupcakes"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/code
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

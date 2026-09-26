@@ -1,0 +1,36 @@
+# Segredos - NUNCA comitar
+.env
+.env.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+
+# Banco local
+*.sqlite3
+postgres-data/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# desconsiderando para versionamento de documentação do projeto
+
+docs/INSTRUCTIONS*
+docs/RECAP*
+docs/roteiro-video.md
