@@ -10,7 +10,7 @@ WORKDIR /code
 # reinstala dependencias quando o pyproject muda, nao a cada edicao de
 # codigo. Economiza minutos por build.
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir ".[dev]"
 
 COPY --chown=app:app . .
 

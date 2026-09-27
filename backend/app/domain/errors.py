@@ -76,3 +76,46 @@ class CredenciaisInvalidasError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("E-mail ou senha invalidos")
+
+
+class CupcakeNaoEncontradoError(DomainError):
+    """Cupcake inexistente no catalogo."""
+    codigo = "cupcake_nao_encontrado"
+
+    def __init__(self, cupcake_id: str) -> None:
+        super().__init__("Cupcake nao encontrado")
+        self.cupcake_id = cupcake_id
+
+
+class PedidoNaoEncontradoError(DomainError):
+    """Pedido inexistente OU pertencente a outro usuario.
+
+    Uma excecao so para os dois casos e proposital. Distinguir
+    "nao existe" de "existe mas nao e seu" permitiria a um atacante
+    descobrir quais ids de pedido sao validos no sistema, apenas
+    observando qual mensagem volta.
+    """
+    codigo = "pedido_nao_encontrado"
+
+    def __init__(self, pedido_id: str) -> None:
+        super().__init__("Pedido nao encontrado")
+        self.pedido_id = pedido_id
+
+
+class SenhaMuitoLongaError(DomainError):
+    """RN-07b - limite superior de senha.
+
+    O numero 72 vem do bcrypt (chave maxima do Blowfish), mas o tratamos
+    como regra de PRODUTO: "senha entre 8 e 72 caracteres" e restricao
+    comum em sistemas reais e nao incomoda usuario nenhum.
+
+    Reconhecendo o vazamento: o dominio nao deveria conhecer limite de
+    biblioteca de criptografia. A alternativa purista seria pre-hashear
+    com SHA-256 + base64 antes do bcrypt, aceitando qualquer tamanho. A
+    escolha aqui foi pela simplicidade, e esta registrada como tal.
+    """
+    codigo = "senha_muito_longa"
+
+    def __init__(self, maximo_bytes: int) -> None:
+        super().__init__(f"A senha nao pode exceder {maximo_bytes} bytes")
+        self.maximo_bytes = maximo_bytes

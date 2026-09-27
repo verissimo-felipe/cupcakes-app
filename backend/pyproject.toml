@@ -10,15 +10,23 @@ dependencies = [
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
-    "passlib[bcrypt]>=1.7",
+    # bcrypt chamado DIRETAMENTE. O passlib foi removido: sua ultima
+    # versao e de 2020 e quebra com bcrypt >= 4.1, porque tenta ler
+    # `bcrypt.__about__.__version__`, atributo que deixou de existir.
+    "bcrypt>=4.1",
     "pyjwt>=2.10",
     "python-multipart>=0.0.12",
+    "email-validator>=2.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "httpx>=0.28", "ruff>=0.8"]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+
