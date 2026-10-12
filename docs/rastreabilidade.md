@@ -61,6 +61,7 @@ entregaria catálogo sem carrinho, isto é, um e-commerce onde não se compra.
 | ID 06 | Remover do Carrinho | E3 | RF-08 |
 | ID 07 | Finalização / Checkout | E3 | RF-12, RF-13 |
 | ID 08 | Rastreamento | E5 | RF-14, RF-15 |
+| ID 08 (extensão) | Gestão de pedidos pela loja | E5 | RF-15 |
 
 ### Backlog priorizado — não implementado nesta sprint
 
@@ -75,7 +76,8 @@ O roadmap completo (5 sprints / 10 semanas) permanece no board Miro.
 ## 3. Regras de negócio no código
 
 Cada regra vive em `backend/app/domain/` e tem teste dedicado em
-`backend/tests/test_dominio.py`.
+`backend/tests/` (domínio, serviço ou API, conforme onde a regra é
+observável).
 
 | RN | Descrição | História | Implementação | Teste |
 |---|---|---|---|---|
@@ -85,6 +87,40 @@ Cada regra vive em `backend/app/domain/` e tem teste dedicado em
 | RN-04 | Carrinho vazio não vira pedido | ID 07 | `Pedido.a_partir_do_carrinho` | `test_rn04_carrinho_vazio_nao_vira_pedido` |
 | RN-05 | Status do pedido segue FSM | ID 08 | `TRANSICOES_PERMITIDAS` | `test_rn05_nao_pula_etapa` |
 | RN-06 | Item repetido soma, não duplica | ID 05 | `Carrinho.adicionar` | `test_rn06_item_repetido_soma_em_vez_de_duplicar` |
+| RN-07 | Senha com no mínimo 8 caracteres | ID 01 | `Usuario.validar_senha_plana` | `test_rn07_senha_curta_e_recusada` |
+| RN-07b | Senha com no máximo 72 bytes | ID 01 | `Usuario.validar_senha_plana` | `test_rn07b_senha_acima_de_72_bytes_e_recusada` |
+| RN-08 | E-mail normalizado (minúsculas, sem espaços) | ID 01 | `Usuario.normalizar_email` | `test_cadastro_normaliza_email` |
+| RN-09 | Um e-mail, uma conta | ID 01 | `AutenticacaoService.cadastrar` + índice único | `test_email_duplicado_e_recusado_mesmo_com_caixa_diferente` |
+| RN-10 | Login falho não revela qual campo errou | ID 02 | `CredenciaisInvalidasError` | `test_rn10_email_inexistente_e_senha_errada_dao_o_mesmo_erro` |
+| RN-11 | Endereço só muda antes de o pedido sair para entrega | ID 08 | `Pedido.alterar_endereco` | `test_rn11_endereco_travado_depois_de_sair_para_entrega` |
+| RN-12 | Endereço precisa de ao menos 5 caracteres úteis | ID 07, 08 | `_validar_endereco` | `test_rn12_checkout_tambem_recusa_endereco_vazio` |
+| RN-13 | Só pedido entregue ou cancelado pode ser excluído; a exclusão é lógica | ID 08 | `Pedido.excluir` | `test_rn13_pedido_em_andamento_nao_pode_ser_excluido` |
+
+### Extensão do RF-15 — gestão de pedidos pela loja
+
+O RF-15 previa que a loja atualizasse o status do pedido. Na validação do
+fluxo, ficou claro que a loja precisa de mais do que isso para operar:
+ver os pedidos de **todos** os clientes, identificar cada um pelo número,
+corrigir endereço digitado errado e retirar da lista pedidos de teste ou
+duplicados.
+
+| Necessidade da loja | Rota | Regra |
+|---|---|---|
+| Ver todos os pedidos, com cliente, data e número | `GET /api/v1/admin/pedidos` | — |
+| Filtrar a fila por etapa | `GET /api/v1/admin/pedidos?status=` | — |
+| Avançar uma etapa ("acelerar a entrega") | `POST /api/v1/admin/pedidos/{id}/avancar` | RN-05 |
+| Cancelar | `POST /api/v1/admin/pedidos/{id}/cancelar` | RN-05 |
+| Corrigir o endereço | `PATCH /api/v1/admin/pedidos/{id}` | RN-11, RN-12 |
+| Excluir (lógico) | `DELETE /api/v1/admin/pedidos/{id}` | RN-13 |
+
+Não há cartão de história próprio para esta extensão. Fica registrada
+como candidata a **ID 16 – Gestão de Pedidos pela Loja** no backlog, para
+reconciliação com o board.
+
+**Por que exclusão lógica:** pedido é registro de venda. A linha continua
+no banco com `excluido_em` preenchido, e só deixa de aparecer na
+aplicação. Apagar fisicamente faria o faturamento deixar de bater com o
+caixa e eliminaria a trilha de auditoria.
 
 ---
 

@@ -180,7 +180,88 @@ para entrega; depois disso, apenas a conclusão.
 
 ---
 
-## 9. Funcionalidades previstas para versões futuras
+## 9. Área da loja (equipe)
+
+Seção destinada à equipe da loja. Clientes não têm acesso: quem abrir o
+endereço com uma conta de cliente vê o aviso **Área restrita à equipe da
+loja**.
+
+### Acesso
+
+As contas da equipe são autorizadas pelo administrador do sistema. Ao
+entrar com uma delas, o menu superior exibe o link **Gestão** e o selo
+**loja** ao lado do nome.
+
+`[CAPTURA: menu com o link Gestão]`
+
+### Lista de pedidos
+
+A tela **Gestão** mostra os pedidos de todos os clientes, do mais
+recente para o mais antigo.
+
+`[CAPTURA: lista de pedidos da loja]`
+
+| Coluna | Conteúdo |
+|---|---|
+| Pedido | Número (8 primeiros caracteres), botão **Copiar ID** e data/hora |
+| Cliente | Nome e e-mail de quem comprou |
+| Total | Valor e quantidade de itens |
+| Etapa | Situação atual do pedido |
+
+Os botões acima da lista filtram por etapa e mostram quantos pedidos há
+em cada uma. **Atualizar lista** busca pedidos novos.
+
+O botão **Copiar ID** copia o identificador completo do pedido, útil
+para atendimento ou para registrar um problema com a entrega.
+
+### Avançar a etapa
+
+O botão escuro de cada pedido executa o próximo passo:
+
+| Etapa atual | Botão | Resultado |
+|---|---|---|
+| Recebido | **Iniciar preparo** | Em preparo |
+| Em preparo | **Enviar para entrega** | Saiu para entrega |
+| Saiu para entrega | **Confirmar entrega** | Entregue |
+
+O avanço é sempre de uma etapa por vez. O cliente vê a nova etapa assim
+que abrir ou atualizar a tela do pedido.
+
+### Gerenciar um pedido
+
+Clique em **Gerenciar** para abrir o pedido completo: itens, valores,
+cliente, endereço e linha do tempo.
+
+`[CAPTURA: tela de gerenciamento de um pedido]`
+
+| Ação | Quando está disponível |
+|---|---|
+| Avançar etapa | Até o pedido ser entregue |
+| Cancelar pedido | Enquanto o pedido não saiu para entrega |
+| Corrigir endereço | Enquanto o pedido não saiu para entrega |
+| Excluir pedido | Somente pedidos entregues ou cancelados |
+
+Cancelar e excluir pedem confirmação antes de executar.
+
+**Itens e valores não são editáveis.** Eles correspondem ao que o
+cliente pagou; uma alteração exigiria estorno ou cobrança adicional.
+
+**Excluir não apaga a venda.** O pedido sai das listas da loja e do
+cliente, mas o registro permanece guardado no sistema para fins de
+auditoria. Para excluir um pedido em andamento, cancele-o primeiro.
+
+### Mensagens possíveis
+
+| Mensagem | Motivo |
+|---|---|
+| O endereço não pode mais ser alterado | O pedido já saiu para entrega |
+| Apenas pedidos entregues ou cancelados podem ser excluídos | O pedido ainda está em andamento |
+| Transição inválida | O pedido mudou de etapa em outra tela; atualize a página |
+| Operação restrita | A conta não pertence à equipe da loja |
+
+---
+
+## 10. Funcionalidades previstas para versões futuras
 
 Esta versão entrega o fluxo completo de compra. As funcionalidades abaixo
 constam do planejamento e não estão disponíveis:
@@ -198,7 +279,7 @@ constam do planejamento e não estão disponíveis:
 
 ---
 
-## 10. Problemas comuns
+## 11. Problemas comuns
 
 | Situação | Solução |
 |---|---|
