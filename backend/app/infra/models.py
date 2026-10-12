@@ -97,6 +97,10 @@ class PedidoORM(Base):
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="recebido")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_agora)
+    # Exclusao logica. NULL = ativo. Ver `Pedido.excluir` e a migracao 0002.
+    excluido_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     # `cascade="all, delete-orphan"` faz o SQLAlchemy apagar os itens
     # quando o pedido some. `lazy="selectin"` carrega todos os itens em UMA

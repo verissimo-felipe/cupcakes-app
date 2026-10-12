@@ -11,9 +11,10 @@ camadas, concentrado num lugar so.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import Select, delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Carrinho, Cupcake, ItemCarrinho, Pedido, StatusPedido
@@ -121,6 +122,19 @@ class UsuarioRepositorySQL:
         linha = self._session.scalars(stmt).first()
         return _usuario_para_dominio(linha) if linha else None
 
+    def buscar_por_ids(self, ids: Iterable[UUID]) -> dict[UUID, Usuario]:
+        """UMA consulta com `IN (...)`, qualquer que seja a quantidade.
+
+        A alternativa ingenua - `buscar_por_id` dentro de um laco - e o
+        problema N+1: 50 pedidos na tela da loja virariam 50 consultas so
+        para descobrir o nome de cada cliente.
+        """
+        alvos = set(ids)
+        if not alvos:
+            return {}
+        stmt = select(UsuarioORM).where(UsuarioORM.id.in_(alvos))
+        return {l.id: _usuario_para_dominio(l) for l in self._session.scalars(stmt)}
+
     def salvar(self, usuario: Usuario) -> None:
         linha = self._session.get(UsuarioORM, usuario.id)
         if linha is None:
@@ -189,6 +203,8 @@ class PedidoRepositorySQL:
         linha = self._session.get(PedidoORM, pedido.id)
         if linha is None:
             linha = PedidoORM(id=pedido.id, usuario_id=pedido.usuario_id)
+            if pedido.criado_em is not None:
+                linha.criado_em = pedido.criado_em
             self._session.add(linha)
             # Itens so sao gravados na criacao. Pedido fechado nao muda de
             # composicao - so de status. Regravar itens em cada mudanca de
@@ -205,19 +221,47 @@ class PedidoRepositorySQL:
         linha.endereco_entrega = pedido.endereco_entrega
         linha.total = pedido.total
         linha.status = pedido.status.value
+        linha.excluido_em = pedido.excluido_em
         self._session.flush()
 
     def buscar_por_id(self, pedido_id: UUID) -> Pedido | None:
         linha = self._session.get(PedidoORM, pedido_id)
-        return self._para_dominio(linha) if linha else None
+        if linha is None or linha.excluido_em is not None:
+            return None
+        return self._para_dominio(linha)
 
     def listar_por_usuario(self, usuario_id: UUID) -> list[Pedido]:
         stmt = (
-            select(PedidoORM)
+            self._ativos()
             .where(PedidoORM.usuario_id == usuario_id)
             .order_by(PedidoORM.criado_em.desc())
         )
         return [self._para_dominio(l) for l in self._session.scalars(stmt)]
+
+    def listar_todos(self, status: StatusPedido | None = None) -> list[Pedido]:
+        """Visao da loja. Sem filtro de usuario - por isso so e chamado por
+        `GestaoPedidosService`, que so e alcancavel por rota de admin."""
+        stmt = self._ativos()
+        if status is not None:
+            stmt = stmt.where(PedidoORM.status == status.value)
+        stmt = stmt.order_by(PedidoORM.criado_em.desc())
+        return [self._para_dominio(l) for l in self._session.scalars(stmt)]
+
+    @staticmethod
+    def _ativos() -> Select[tuple[PedidoORM]]:
+        """Ponto de partida de TODA consulta de leitura de pedidos.
+
+        O risco classico da exclusao logica e esquecer o filtro em uma
+        consulta nova: o pedido "excluido" reaparece numa tela qualquer.
+        Concentrar o `WHERE excluido_em IS NULL` aqui reduz esse risco a
+        lembrar de partir de `_ativos()` em vez de `select(PedidoORM)`.
+
+        Em escala maior, a garantia sobe de nivel: um filtro global do
+        ORM (`with_loader_criteria`) ou uma VIEW no banco com RLS
+        (Row-Level Security), para que nem SQL escrito a mao enxergue os
+        excluidos.
+        """
+        return select(PedidoORM).where(PedidoORM.excluido_em.is_(None))
 
     @staticmethod
     def _para_dominio(linha: PedidoORM) -> Pedido:
@@ -228,4 +272,6 @@ class PedidoRepositorySQL:
             endereco_entrega=linha.endereco_entrega,
             total=linha.total,
             status=StatusPedido(linha.status),
+            criado_em=linha.criado_em,
+            excluido_em=linha.excluido_em,
         )

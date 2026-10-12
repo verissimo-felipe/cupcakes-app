@@ -24,10 +24,11 @@ precise buscar.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.entities import Carrinho, Cupcake, Pedido
+from app.domain.entities import Carrinho, Cupcake, Pedido, StatusPedido
 from app.domain.usuario import Usuario
 
 
@@ -48,6 +49,10 @@ class UsuarioRepository(Protocol):
 
     def buscar_por_email(self, email: str) -> Usuario | None: ...
 
+    def buscar_por_ids(self, ids: Iterable[UUID]) -> dict[UUID, Usuario]:
+        """Varios usuarios numa consulta so - ver `GestaoPedidosService.listar`."""
+        ...
+
     def salvar(self, usuario: Usuario) -> None: ...
 
 
@@ -67,10 +72,21 @@ class CarrinhoRepository(Protocol):
 
 
 class PedidoRepository(Protocol):
-    """Pedidos. Historias ID 07, 08."""
+    """Pedidos. Historias ID 07, 08.
+
+    CONTRATO DA EXCLUSAO LOGICA: nenhum metodo de LEITURA devolve pedido
+    com `excluido_em` preenchido. Para o resto do sistema, pedido excluido
+    simplesmente nao existe - a linha so e visivel direto no banco, para
+    auditoria. `salvar` continua aceitando o pedido excluido, porque e
+    por ele que a exclusao e gravada.
+    """
 
     def salvar(self, pedido: Pedido) -> None: ...
 
     def buscar_por_id(self, pedido_id: UUID) -> Pedido | None: ...
 
     def listar_por_usuario(self, usuario_id: UUID) -> list[Pedido]: ...
+
+    def listar_todos(self, status: StatusPedido | None = None) -> list[Pedido]:
+        """Visao da LOJA: pedidos de todos os clientes, mais recentes primeiro."""
+        ...

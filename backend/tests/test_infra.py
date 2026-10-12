@@ -235,3 +235,97 @@ def test_preco_do_pedido_nao_muda_com_reajuste_no_catalogo(session, usuario, cup
     recarregado = PedidoRepositorySQL(session).buscar_por_id(pedido.id)
     assert recarregado.total == Decimal("17.00")
     assert recarregado.itens[0].preco_unitario == Decimal("8.50")
+
+
+# ---------------------------------------------------------------------
+# Gestao pela loja - extensao da historia ID 08 / RF-15
+# ---------------------------------------------------------------------
+
+
+def _pedido_de(session, usuario, cupcake_orm, quantidade=1) -> Pedido:
+    carrinho = Carrinho(usuario_id=usuario.id)
+    carrinho.adicionar(CupcakeRepositorySQL(session).buscar_por_id(cupcake_orm.id), quantidade)
+    pedido = Pedido.a_partir_do_carrinho(carrinho, "Rua das Flores, 123")
+    PedidoRepositorySQL(session).salvar(pedido)
+    return pedido
+
+
+def test_exclusao_logica_some_das_consultas_mas_fica_no_banco(session, usuario, cupcakes):
+    """O coracao da exclusao logica, verificado contra o banco."""
+    from app.infra.models import PedidoORM
+
+    repo = PedidoRepositorySQL(session)
+    pedido = _pedido_de(session, usuario, cupcakes[0])
+    pedido.cancelar()
+    pedido.excluir()
+    repo.salvar(pedido)
+
+    # Para a aplicacao, nao existe mais...
+    assert repo.buscar_por_id(pedido.id) is None
+    assert repo.listar_por_usuario(usuario.id) == []
+    assert repo.listar_todos() == []
+
+    # ...mas a linha continua la, com itens, para auditoria.
+    linha = session.get(PedidoORM, pedido.id)
+    assert linha is not None
+    assert linha.excluido_em is not None
+    assert len(linha.itens) == 1
+
+
+def test_listar_todos_traz_pedidos_de_todos_os_clientes(session, usuario, cupcakes):
+    outro = Usuario(id=uuid4(), nome="Ana", email="ana@mail.com", senha_hash="hash-fake")
+    UsuarioRepositorySQL(session).salvar(outro)
+
+    _pedido_de(session, usuario, cupcakes[0])
+    _pedido_de(session, outro, cupcakes[1])
+
+    assert len(PedidoRepositorySQL(session).listar_todos()) == 2
+
+
+def test_listar_todos_filtra_por_status(session, usuario, cupcakes):
+    repo = PedidoRepositorySQL(session)
+    _pedido_de(session, usuario, cupcakes[0])
+    em_preparo = _pedido_de(session, usuario, cupcakes[1])
+    em_preparo.avancar()
+    repo.salvar(em_preparo)
+
+    resultado = repo.listar_todos(StatusPedido.EM_PREPARO)
+    assert [p.id for p in resultado] == [em_preparo.id]
+
+
+def test_listar_todos_ordena_do_mais_recente(session, usuario, cupcakes):
+    from datetime import datetime, timezone
+
+    repo = PedidoRepositorySQL(session)
+    antigo = _pedido_de(session, usuario, cupcakes[0])
+    recente = _pedido_de(session, usuario, cupcakes[1])
+
+    # Datas explicitas: dois pedidos criados no mesmo milissegundo
+    # empatariam, e o teste passaria ou falharia por sorte.
+    from app.infra.models import PedidoORM
+
+    session.get(PedidoORM, antigo.id).criado_em = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    session.get(PedidoORM, recente.id).criado_em = datetime(2026, 10, 2, tzinfo=timezone.utc)
+    session.flush()
+
+    assert [p.id for p in repo.listar_todos()] == [recente.id, antigo.id]
+
+
+def test_alteracao_de_endereco_persiste(session, usuario, cupcakes):
+    repo = PedidoRepositorySQL(session)
+    pedido = _pedido_de(session, usuario, cupcakes[0])
+    pedido.alterar_endereco("Avenida Central, 900")
+    repo.salvar(pedido)
+
+    assert repo.buscar_por_id(pedido.id).endereco_entrega == "Avenida Central, 900"
+
+
+def test_buscar_varios_usuarios_numa_consulta(session, usuario):
+    outro = Usuario(id=uuid4(), nome="Ana", email="ana@mail.com", senha_hash="hash-fake")
+    repo = UsuarioRepositorySQL(session)
+    repo.salvar(outro)
+
+    encontrados = repo.buscar_por_ids([usuario.id, outro.id, uuid4()])
+
+    assert set(encontrados) == {usuario.id, outro.id}  # o id inexistente some
+    assert repo.buscar_por_ids([]) == {}
