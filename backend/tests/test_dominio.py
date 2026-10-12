@@ -149,3 +149,120 @@ def test_rn05_entregue_e_estado_terminal(carrinho, cupcake_baunilha):
 
     with pytest.raises(TransicaoStatusInvalidaError):
         pedido.mudar_status(StatusPedido.CANCELADO)
+
+
+# --------------------------------------------------------------------
+# Gestao pela loja - extensao da historia ID 08 / RF-15
+# --------------------------------------------------------------------
+
+
+@pytest.fixture
+def pedido(carrinho, cupcake_baunilha) -> Pedido:
+    carrinho.adicionar(cupcake_baunilha, quantidade=2)
+    return Pedido.a_partir_do_carrinho(carrinho, "Rua das Flores, 123")
+
+
+def test_proxima_etapa_e_subconjunto_da_fsm():
+    """Teste de INVARIANTE: as duas tabelas nunca podem divergir.
+
+    Se alguem acrescentar uma etapa em PROXIMA_ETAPA sem libera-la em
+    TRANSICOES_PERMITIDAS, o botao "avancar" levaria 409 para sempre.
+    Este teste quebra antes disso chegar a tela.
+    """
+    from app.domain.entities import PROXIMA_ETAPA, TRANSICOES_PERMITIDAS
+
+    for origem, destino in PROXIMA_ETAPA.items():
+        assert destino in TRANSICOES_PERMITIDAS[origem]
+
+
+def test_avancar_percorre_o_caminho_feliz_uma_etapa_por_vez(pedido):
+    assert pedido.avancar() is StatusPedido.EM_PREPARO
+    assert pedido.avancar() is StatusPedido.SAIU_PARA_ENTREGA
+    assert pedido.avancar() is StatusPedido.ENTREGUE
+    assert pedido.proximo_status is None
+
+
+def test_rn05_avancar_pedido_finalizado_e_recusado(pedido):
+    pedido.cancelar()
+    with pytest.raises(TransicaoStatusInvalidaError):
+        pedido.avancar()
+
+
+def test_criado_em_e_preenchido_no_checkout(pedido):
+    assert pedido.criado_em is not None
+
+
+def test_rn11_endereco_editavel_enquanto_esta_na_loja(pedido):
+    pedido.avancar()  # em_preparo - ainda na cozinha
+    pedido.alterar_endereco("  Rua Nova, 456  ")
+    assert pedido.endereco_entrega == "Rua Nova, 456"
+
+
+def test_rn11_endereco_travado_depois_de_sair_para_entrega(pedido):
+    from app.domain.errors import PedidoNaoEditavelError
+
+    pedido.avancar()
+    pedido.avancar()  # saiu_para_entrega
+    with pytest.raises(PedidoNaoEditavelError):
+        pedido.alterar_endereco("Rua Nova, 456")
+    assert pedido.endereco_entrega == "Rua das Flores, 123"
+
+
+def test_rn12_endereco_so_com_espacos_e_recusado(pedido):
+    from app.domain.errors import EnderecoInvalidoError
+
+    with pytest.raises(EnderecoInvalidoError):
+        pedido.alterar_endereco("        ")
+
+
+def test_rn12_checkout_tambem_recusa_endereco_vazio(carrinho, cupcake_baunilha):
+    from app.domain.errors import EnderecoInvalidoError
+
+    carrinho.adicionar(cupcake_baunilha)
+    with pytest.raises(EnderecoInvalidoError):
+        Pedido.a_partir_do_carrinho(carrinho, "     ")
+
+
+def test_rn13_pedido_em_andamento_nao_pode_ser_excluido(pedido):
+    from app.domain.errors import PedidoNaoExcluivelError
+
+    with pytest.raises(PedidoNaoExcluivelError):
+        pedido.excluir()
+    assert pedido.excluido_em is None
+
+
+def test_rn13_exclusao_logica_de_pedido_cancelado(pedido):
+    pedido.cancelar()
+    pedido.excluir()
+
+    assert pedido.excluido_em is not None
+    # Nada mais foi apagado: itens, total e status continuam no objeto.
+    assert pedido.total == Decimal("17.00")
+    assert pedido.status is StatusPedido.CANCELADO
+
+
+def test_excluir_duas_vezes_preserva_a_data_original(pedido):
+    from datetime import datetime, timezone
+
+    primeira = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    pedido.cancelar()
+    pedido.excluir(quando=primeira)
+    pedido.excluir()
+
+    assert pedido.excluido_em == primeira
+
+
+def test_acoes_acompanham_o_estado(pedido):
+    """As flags que o front usa para desenhar botoes vem do dominio."""
+    assert pedido.pode_cancelar and pedido.pode_editar_endereco
+    assert not pedido.pode_excluir
+
+    pedido.avancar()
+    pedido.avancar()  # saiu_para_entrega
+    assert not pedido.pode_cancelar
+    assert not pedido.pode_editar_endereco
+    assert not pedido.pode_excluir
+
+    pedido.avancar()  # entregue
+    assert pedido.pode_excluir
+    assert pedido.proximo_status is None

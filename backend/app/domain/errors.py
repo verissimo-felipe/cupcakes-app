@@ -119,3 +119,51 @@ class SenhaMuitoLongaError(DomainError):
     def __init__(self, maximo_bytes: int) -> None:
         super().__init__(f"A senha nao pode exceder {maximo_bytes} bytes")
         self.maximo_bytes = maximo_bytes
+
+
+class EnderecoInvalidoError(DomainError):
+    """RN-12 - endereco precisa ter conteudo util, nao so espacos.
+
+    O Pydantic confere `min_length=5` no texto BRUTO, entao cinco espacos
+    passariam por ele. O dominio confere depois do `strip()`, e vale para
+    qualquer porta de entrada - checkout do cliente ou edicao da loja.
+    """
+    codigo = "endereco_invalido"
+
+    def __init__(self, minimo: int) -> None:
+        super().__init__(f"O endereco precisa ter pelo menos {minimo} caracteres")
+        self.minimo = minimo
+
+
+class PedidoNaoEditavelError(DomainError):
+    """RN-11 - o endereco so muda enquanto o pedido esta na loja.
+
+    Depois de `saiu_para_entrega`, o entregador ja esta na rua com o
+    endereco antigo. Trocar no sistema nao muda para onde ele vai - so
+    cria um registro que nao bate com o que aconteceu.
+    """
+    codigo = "pedido_nao_editavel"
+
+    def __init__(self, status: str) -> None:
+        super().__init__(
+            f"O endereco nao pode mais ser alterado: o pedido esta '{status}'"
+        )
+        self.status = status
+
+
+class PedidoNaoExcluivelError(DomainError):
+    """RN-13 - so pedido FINALIZADO (entregue ou cancelado) pode ser excluido.
+
+    Excluir um pedido em andamento faria ele sumir da tela do cliente
+    enquanto a cozinha ainda prepara os cupcakes. O caminho correto e
+    cancelar primeiro - o cancelamento fica registrado - e so entao
+    tirar da lista.
+    """
+    codigo = "pedido_nao_excluivel"
+
+    def __init__(self, status: str) -> None:
+        super().__init__(
+            "Apenas pedidos entregues ou cancelados podem ser excluidos. "
+            f"Este esta '{status}': cancele antes de excluir."
+        )
+        self.status = status
