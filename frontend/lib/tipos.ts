@@ -19,6 +19,12 @@ export interface Usuario {
   id: string;
   nome: string;
   email: string;
+  /**
+   * Serve para a INTERFACE decidir o que desenhar, nao para autorizar.
+   * A autorizacao real esta no servidor (`deps.usuario_admin`): trocar
+   * este campo no DevTools libera o botao, mas a requisicao leva 403.
+   */
+  admin: boolean;
 }
 
 export interface Cupcake {
@@ -60,4 +66,42 @@ export interface PedidoResumo {
   total: string;
   status: StatusPedido;
   quantidade_itens: number;
+}
+
+// ------------------------------------------------------------------
+// Visao da LOJA - rotas /admin/pedidos
+// ------------------------------------------------------------------
+
+export interface ClienteResumo {
+  nome: string;
+  email: string;
+}
+
+/**
+ * O que a loja pode fazer com o pedido AGORA, calculado pelo dominio no
+ * back-end. A tela so le estes campos para decidir quais botoes mostrar -
+ * ela nao conhece a FSM (Finite State Machine) do pedido.
+ */
+export interface AcoesPedido {
+  /** `null` quando o pedido ja terminou (entregue ou cancelado). */
+  proximo_status: StatusPedido | null;
+  pode_cancelar: boolean;
+  pode_editar_endereco: boolean;
+  pode_excluir: boolean;
+}
+
+export interface PedidoGestaoResumo {
+  id: string;
+  /** ISO 8601 com fuso, ex.: "2026-10-12T17:45:00+00:00". */
+  criado_em: string | null;
+  cliente: ClienteResumo;
+  total: string;
+  status: StatusPedido;
+  quantidade_itens: number;
+  acoes: AcoesPedido;
+}
+
+export interface PedidoGestao extends PedidoGestaoResumo {
+  itens: ItemCarrinho[];
+  endereco_entrega: string;
 }
