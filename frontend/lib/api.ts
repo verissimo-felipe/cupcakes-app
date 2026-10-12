@@ -2,7 +2,10 @@ import type {
   Carrinho,
   Cupcake,
   Pedido,
+  PedidoGestao,
+  PedidoGestaoResumo,
   PedidoResumo,
+  StatusPedido,
   Usuario,
 } from "./tipos";
 
@@ -213,4 +216,39 @@ export const pedidos = {
   listar: () => requisitar<PedidoResumo[]>("/pedidos"),
 
   detalhar: (id: string) => requisitar<Pedido>(`/pedidos/${id}`),
+};
+
+// ------------------------------------------------------------------
+// Gestao da loja - extensao da historia ID 08 / RF-15
+//
+// Todas exigem conta listada em ADMIN_EMAILS no back-end. Cliente comum
+// recebe 403 (`acesso_negado`) em QUALQUER uma delas: a protecao esta no
+// router inteiro do servidor, nao rota a rota.
+// ------------------------------------------------------------------
+
+export const loja = {
+  /** Sem filtro: a tela filtra localmente para mostrar a contagem por etapa. */
+  listar: (status?: StatusPedido) =>
+    requisitar<PedidoGestaoResumo[]>(
+      `/admin/pedidos${status ? `?status=${status}` : ""}`,
+    ),
+
+  detalhar: (id: string) => requisitar<PedidoGestao>(`/admin/pedidos/${id}`),
+
+  /** Uma etapa adiante. O servidor decide qual - a tela nao escolhe destino. */
+  avancar: (id: string) =>
+    requisitar<PedidoGestao>(`/admin/pedidos/${id}/avancar`, { metodo: "POST" }),
+
+  cancelar: (id: string) =>
+    requisitar<PedidoGestao>(`/admin/pedidos/${id}/cancelar`, { metodo: "POST" }),
+
+  alterarEndereco: (id: string, endereco_entrega: string) =>
+    requisitar<PedidoGestao>(`/admin/pedidos/${id}`, {
+      metodo: "PATCH",
+      corpo: { endereco_entrega },
+    }),
+
+  /** Exclusao LOGICA: some das listas, continua no banco. 204 sem corpo. */
+  excluir: (id: string) =>
+    requisitar<void>(`/admin/pedidos/${id}`, { metodo: "DELETE" }),
 };

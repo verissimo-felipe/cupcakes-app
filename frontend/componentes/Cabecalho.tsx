@@ -24,7 +24,7 @@ export function Cabecalho() {
           Doce Forma
         </Link>
 
-        <nav className="flex items-center gap-5 text-minuscula text-papel">
+        <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-minuscula text-papel">
           <Link href="/carrinho" className="hover:text-buttercream">
             Carrinho
             {quantidadeCarrinho > 0 && (
@@ -41,6 +41,30 @@ export function Cabecalho() {
             <span className="text-tinta-suave">···</span>
           ) : usuario ? (
             <>
+              {/* Quem esta logado precisa ficar visivel: o endereco de
+                  entrega e o historico vem da conta, entao confirmar um
+                  pedido na conta errada e um erro caro e silencioso.
+                  O e-mail completo vai no `title` para conferencia sem
+                  ocupar a barra. */}
+              <span
+                title={usuario.email}
+                className="hidden text-tinta-suave sm:inline"
+              >
+                {usuario.nome.split(" ")[0]}
+                {usuario.admin && (
+                  <span className="ml-1.5 rounded-full bg-buttercream px-2 py-0.5 text-ameixa">
+                    loja
+                  </span>
+                )}
+              </span>
+              {/* Link da gestao so para a equipe. Esconder e conforto de
+                  interface; quem digitar /loja/pedidos sem ser admin ve o
+                  aviso de area restrita, e a API responde 403. */}
+              {usuario.admin && (
+                <Link href="/loja/pedidos" className="text-buttercream hover:underline">
+                  Gestão
+                </Link>
+              )}
               <Link href="/pedidos" className="hover:text-buttercream">
                 Meus pedidos
               </Link>

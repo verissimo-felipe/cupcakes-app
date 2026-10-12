@@ -42,3 +42,44 @@ export const SEQUENCIA_STATUS: StatusPedido[] = [
   "saiu_para_entrega",
   "entregue",
 ];
+
+/**
+ * Data e hora no fuso de QUEM ESTA OLHANDO.
+ *
+ * O servidor guarda e devolve em UTC (Coordinated Universal Time), com o
+ * fuso explicito na string. O `Date` do navegador converte para o fuso
+ * local sozinho - a cozinha em Brasilia ve 14:45, nao 17:45.
+ */
+export function formatarDataHora(iso: string | null): string {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(iso));
+}
+
+/**
+ * Os 8 primeiros caracteres do UUID (Universally Unique Identifier).
+ *
+ * Bastam para uma pessoa reconhecer e citar o pedido ao telefone: 16^8
+ * sao ~4 bilhoes de combinacoes. O identificador COMPLETO continua sendo
+ * o que vai na URL e na API.
+ */
+export function idCurto(id: string): string {
+  return id.slice(0, 8);
+}
+
+/**
+ * Rotulo do botao que LEVA a cada etapa - verbo de quem esta na cozinha,
+ * nao o nome do estado. "Iniciar preparo" diz o que o clique faz;
+ * "Avancar para em preparo" obriga a pessoa a traduzir.
+ */
+const ROTULOS_ACAO: Partial<Record<StatusPedido, string>> = {
+  em_preparo: "Iniciar preparo",
+  saiu_para_entrega: "Enviar para entrega",
+  entregue: "Confirmar entrega",
+};
+
+export function rotuloAvancar(destino: StatusPedido): string {
+  return ROTULOS_ACAO[destino] ?? `Avançar para ${rotuloStatus(destino).toLowerCase()}`;
+}
