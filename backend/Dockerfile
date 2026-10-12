@@ -17,4 +17,7 @@ COPY --chown=app:app . .
 USER app
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Padrao = PRODUCAO: migra, carrega o catalogo e sobe na porta do host.
+# O docker-compose substitui este comando por um com --reload para
+# desenvolvimento (ver `command:` la).
+CMD ["sh", "scripts/iniciar.sh"]
