@@ -19,9 +19,16 @@ npm install
 npm run dev                          # http://localhost:3000
 ```
 
-O endereço da API vem de `NEXT_PUBLIC_API_URL` e, se a variável não
-existir, assume `http://localhost:8000`. Para apontar para outro
-servidor, crie `frontend/.env.local` com essa variável.
+**Como o front encontra a API.** O navegador chama `/api/v1/...` no
+próprio endereço do front, e o Next repassa para a API (proxy definido
+em `next.config.ts`). Assim o cookie de sessão fica no mesmo site do
+front — requisito para o login funcionar quando front e API estão em
+domínios diferentes, como em produção.
+
+| Variável | Onde é lida | Padrão | Uso |
+|---|---|---|---|
+| `API_URL` | servidor do Next, **no build** | `http://localhost:8000` | Destino do proxy. Em produção, a URL do back-end |
+| `NEXT_PUBLIC_API_URL` | navegador | *(vazia)* | Opcional. Se definida, o navegador fala direto com a API, sem proxy — útil só em desenvolvimento |
 
 | Comando | O que faz |
 |---|---|

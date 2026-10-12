@@ -85,6 +85,36 @@ como o card de produto. Detalhes em [`frontend/README.md`](frontend/README.md).
 
 ---
 
+## Deploy
+
+Hospedagem gratuita em três serviços:
+
+| Parte | Serviço | Configuração |
+|---|---|---|
+| Banco | **Neon** (PostgreSQL) | Copiar a *connection string* |
+| API | **Render** (Docker, pasta `backend/`) | Variáveis abaixo; health check em `/health` |
+| Front | **Vercel** (pasta `frontend/`) | `API_URL` = URL da API no Render |
+
+Variáveis da API no Render:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | *connection string* do Neon — `postgresql://` é aceito e convertido |
+| `SECRET_KEY` | valor aleatório (`python -c "import secrets; print(secrets.token_urlsafe(32))"`) |
+| `COOKIE_SECURE` | `true` |
+| `CORS_ORIGINS` | `["https://<seu-front>.vercel.app"]` |
+| `ADMIN_EMAILS` | `["<e-mail da conta da loja>"]` |
+
+A API aplica as migrações e carrega o catálogo sozinha ao iniciar
+(`backend/scripts/iniciar.sh`). O front repassa `/api/v1/*` para a API,
+então o cookie de sessão fica no domínio do front — sem isso, o
+navegador bloquearia o cookie entre `vercel.app` e `onrender.com`.
+
+> No plano gratuito do Render, a API "dorme" após 15 minutos sem acesso
+> e leva cerca de um minuto para acordar no primeiro acesso.
+
+---
+
 ## Estrutura
 
 ```
