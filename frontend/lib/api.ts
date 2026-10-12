@@ -9,8 +9,16 @@ import type {
   Usuario,
 } from "./tipos";
 
-const BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/**
+ * Sem `NEXT_PUBLIC_API_URL`, as chamadas sao RELATIVAS (`/api/v1/...`) e
+ * passam pelo proxy de `next.config.ts` - e o modo de producao, que
+ * mantem o cookie de sessao no mesmo site do front.
+ *
+ * Com a variavel definida (ex.: `http://localhost:8000` no `.env.local`),
+ * o navegador fala direto com a API. Funciona em desenvolvimento porque
+ * localhost:3000 e localhost:8000 sao o MESMO site para o cookie.
+ */
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 const API = `${BASE}/api/v1`;
 
