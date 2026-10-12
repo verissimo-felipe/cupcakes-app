@@ -57,14 +57,31 @@ docker compose up --build
 
 ### Testes
 
+**Back-end** — 118 testes (pytest), em quatro camadas:
+
 ```bash
-cd backend
-pip install -e ".[dev]"
-pytest -v
+docker compose exec backend pytest -q        # ou, fora do Docker:
+cd backend && pip install -e ".[dev]" && pytest -q
 ```
 
-Resultado esperado: **11 passed in 0.03s**. Os testes de regra de negócio
-rodam sem banco e sem servidor — consequência direta da arquitetura.
+| Arquivo | O que cobre | Precisa de banco? |
+|---|---|---|
+| `tests/test_dominio.py` | Regras de negócio (RN-01 a RN-13), FSM do pedido | Não |
+| `tests/test_services.py` | Casos de uso, com repositórios falsos em memória | Não |
+| `tests/test_infra.py` | Tradução tabela ↔ entidade, exclusão lógica | SQLite em memória |
+| `tests/test_api.py` | Pilha HTTP inteira: status, cookie, 401/403/404 | SQLite em memória |
+
+Os testes de regra de negócio rodam sem banco e sem servidor — consequência
+direta da arquitetura.
+
+**Front-end** — 53 testes (Vitest + React Testing Library):
+
+```bash
+cd frontend && npm install && npm test
+```
+
+Cobrem o cliente de API, as telas de login, carrinho e loja, e componentes
+como o card de produto. Detalhes em [`frontend/README.md`](frontend/README.md).
 
 ---
 
@@ -77,8 +94,7 @@ cupcakes-app/
 ├── docs/
 │   ├── arquitetura.md        # padrão MVC — justificativa e diagrama
 │   ├── rastreabilidade.md    # História → RF → RN → Código
-│   ├── manual-do-usuario.md
-│   └── RECAP.md
+│   └── manual-do-usuario.md
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # app FastAPI + tratamento de erros
@@ -89,6 +105,10 @@ cupcakes-app/
 │   │   └── api/v1/           # CONTROLLER — routers HTTP
 │   └── tests/
 └── frontend/                 # VIEW — Next.js
+    ├── app/                  # telas (uma pasta por rota)
+    ├── componentes/
+    ├── lib/                  # cliente de API, tipos, formatação
+    └── testes/               # Vitest + React Testing Library
 ```
 
 ---
@@ -99,6 +119,10 @@ Das 15 histórias planejadas, **6 foram implementadas**, escolhidas por
 formarem um fluxo contínuo de compra:
 
 `Cadastro/Login (01, 02) → Catálogo (04) → Carrinho (05, 06) → Checkout (07) → Rastreamento (08)`
+
+Do lado da loja, a **gestão de pedidos** (`/loja/pedidos`) estende o RF-15:
+ver os pedidos de todos os clientes, avançar etapa, cancelar, corrigir
+endereço e excluir — com exclusão lógica, preservando o registro da venda.
 
 O recorte foi vertical, não horizontal: entregar os Sprints 1 e 2 na ordem
 do roadmap produziria catálogo sem carrinho — um e-commerce onde não se
@@ -117,6 +141,9 @@ completo de 5 sprints.
 | Hash de senha | `bcrypt` com salt por hash — não SHA-256, rápido demais para resistir a força bruta |
 | Sessão | JWT em cookie `httpOnly` + `Secure` + `SameSite=Lax` — inacessível a JavaScript, portanto imune a roubo por XSS |
 | SQL | SQLAlchemy com parâmetros vinculados; nenhuma query montada por f-string |
+| Acesso a pedidos | Pedido de outro cliente responde 404, não 403 — evita IDOR (*Insecure Direct Object Reference*) e não confirma que o id existe |
+| Área da loja | Rotas `/api/v1/admin/*` protegidas no router inteiro: anônimo 401, cliente 403 |
+| Redirecionamento | `?voltar=` do login só aceita caminho interno — bloqueia *open redirect* (CWE-601) |
 | Segredos | `.env` no `.gitignore`; apenas `.env.example` é versionado |
 | Container | Processo roda como usuário sem privilégios, não root |
 | Política de senha | Comprimento mínimo, sem exigência de caractere especial — conforme **NIST SP 800-63B**, que abandonou regras de composição por produzirem senhas piores |
@@ -130,7 +157,7 @@ completo de 5 sprints.
 | [`docs/arquitetura.md`](docs/arquitetura.md) | Padrão MVC, diagrama, fluxo de requisição, testabilidade |
 | [`docs/rastreabilidade.md`](docs/rastreabilidade.md) | História → RF → RN → Código; decisões e correções do backlog |
 | [`docs/manual-do-usuario.md`](docs/manual-do-usuario.md) | Manual de uso |
-| [`docs/RECAP.md`](docs/RECAP.md) | Reconstituição do desenvolvimento |
+| [`frontend/README.md`](frontend/README.md) | Estrutura do front-end, decisões e testes |
 
 
 ## Créditos
