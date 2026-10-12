@@ -16,7 +16,7 @@ O que estes testes cobrem e que os de servico NAO cobrem:
 """
 
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +26,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.deps import NOME_COOKIE
 from app.infra.db import Base, get_session
-from app.infra.models import CupcakeORM
+from app.infra.models import CupcakeORM, PedidoORM
 from app.main import app
 
 BASE = "/api/v1"
@@ -120,7 +120,18 @@ def test_resposta_nunca_expoe_o_hash_da_senha(client):
     corpo = r.json()
     assert "senha_hash" not in corpo
     assert "senha" not in corpo
-    assert set(corpo) == {"id", "nome", "email"}
+    # Lista FECHADA de propósito: se alguém acrescentar um campo à
+    # resposta sem pensar, este teste quebra e obriga a decisão
+    # consciente de expor aquele dado.
+    assert set(corpo) == {"id", "nome", "email", "admin"}
+
+
+def test_usuario_comum_nao_vem_marcado_como_admin(client):
+    r = client.post(
+        f"{BASE}/auth/registrar",
+        json={"nome": "Felipe", "email": "felipe@mail.com", "senha": "senha-longa-o-bastante"},
+    )
+    assert r.json()["admin"] is False
 
 
 def test_cookie_e_httponly(client):
@@ -333,11 +344,174 @@ def test_idor_pedido_alheio_devolve_404(com_carrinho):
     assert r.status_code == 404
 
 
-def test_mudar_status_exige_admin(com_carrinho):
-    pedido_id = com_carrinho.post(
-        f"{BASE}/pedidos", json={"endereco_entrega": "Rua das Flores, 123"}
-    ).json()["id"]
+# ---------------------------------------------------------------------
+# Gestao pela loja - extensao da historia ID 08 / RF-15
+# ---------------------------------------------------------------------
 
-    r = com_carrinho.patch(f"{BASE}/pedidos/{pedido_id}/status", json={"status": "em_preparo"})
-    assert r.status_code == 403
-    assert r.json()["detail"]["codigo"] == "acesso_negado"
+ADMIN = f"{BASE}/admin/pedidos"
+EMAIL_LOJA = "loja@doceforma.com"
+
+
+@pytest.fixture
+def loja(client, monkeypatch):
+    """SEGUNDO navegador, logado como a loja.
+
+    Um `TestClient` guarda os cookies de UMA sessao. Para simular cliente
+    e loja ao mesmo tempo, cada um precisa do seu - exatamente como duas
+    pessoas em dois computadores. Os dois falam com o mesmo banco porque
+    o override de `get_session` (fixture `client`) vale para o app todo.
+
+    `ADMIN_EMAILS` e trocado so durante o teste: `monkeypatch` desfaz a
+    alteracao no fim, e nenhum outro teste herda um admin por acidente.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "ADMIN_EMAILS", [EMAIL_LOJA])
+    with TestClient(app) as navegador_da_loja:
+        r = navegador_da_loja.post(
+            f"{BASE}/auth/registrar",
+            json={"nome": "Doce Forma", "email": EMAIL_LOJA, "senha": "senha-da-loja-123"},
+        )
+        assert r.status_code == 201
+        yield navegador_da_loja
+
+
+@pytest.fixture
+def pedido_id(com_carrinho):
+    r = com_carrinho.post(f"{BASE}/pedidos", json={"endereco_entrega": "Rua das Flores, 123"})
+    return r.json()["id"]
+
+
+def test_gestao_exige_autenticacao(client):
+    assert client.get(ADMIN).status_code == 401
+
+
+def test_gestao_recusa_cliente_comum_em_todas_as_rotas(com_carrinho, pedido_id):
+    """Prova de que a protecao esta no ROUTER, nao rota a rota."""
+    chamadas = [
+        ("GET", ADMIN, None),
+        ("GET", f"{ADMIN}/{pedido_id}", None),
+        ("POST", f"{ADMIN}/{pedido_id}/avancar", None),
+        ("POST", f"{ADMIN}/{pedido_id}/cancelar", None),
+        ("PATCH", f"{ADMIN}/{pedido_id}", {"endereco_entrega": "Rua Invadida, 1"}),
+        ("DELETE", f"{ADMIN}/{pedido_id}", None),
+    ]
+    for metodo, url, corpo in chamadas:
+        r = com_carrinho.request(metodo, url, json=corpo)
+        assert r.status_code == 403, f"{metodo} {url} deveria ser 403"
+        assert r.json()["detail"]["codigo"] == "acesso_negado"
+
+
+def test_conta_da_loja_vem_marcada_como_admin(loja):
+    assert loja.get(f"{BASE}/auth/eu").json()["admin"] is True
+
+
+def test_loja_lista_pedido_de_outro_cliente_com_id_e_dono(loja, pedido_id):
+    corpo = loja.get(ADMIN).json()
+
+    assert len(corpo) == 1
+    assert corpo[0]["id"] == pedido_id
+    assert corpo[0]["cliente"] == {"nome": "Felipe", "email": "felipe@mail.com"}
+    assert corpo[0]["criado_em"] is not None
+    assert corpo[0]["acoes"]["proximo_status"] == "em_preparo"
+    assert "itens" not in corpo[0]
+
+
+def test_rota_do_cliente_continua_isolada_ate_para_a_loja(loja, pedido_id):
+    """A loja usa /admin. A rota do cliente nao ganhou excecao para admin."""
+    assert loja.get(f"{BASE}/pedidos/{pedido_id}").status_code == 404
+
+
+def test_loja_detalha_com_itens_e_endereco(loja, pedido_id):
+    corpo = loja.get(f"{ADMIN}/{pedido_id}").json()
+
+    assert corpo["endereco_entrega"] == "Rua das Flores, 123"
+    assert corpo["itens"][0]["quantidade"] == 2
+    assert corpo["total"] == "17.00"
+
+
+def test_avancar_uma_etapa_e_o_cliente_ve_a_mudanca(loja, com_carrinho, pedido_id):
+    r = loja.post(f"{ADMIN}/{pedido_id}/avancar")
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "em_preparo"
+    assert r.json()["acoes"]["proximo_status"] == "saiu_para_entrega"
+    assert com_carrinho.get(f"{BASE}/pedidos/{pedido_id}").json()["status"] == "em_preparo"
+
+
+def test_rn05_avancar_pedido_entregue_devolve_409(loja, pedido_id):
+    for _ in range(3):
+        loja.post(f"{ADMIN}/{pedido_id}/avancar")
+
+    r = loja.post(f"{ADMIN}/{pedido_id}/avancar")
+    assert r.status_code == 409
+    assert r.json()["codigo"] == "transicao_invalida"
+
+
+def test_corrigir_endereco_reflete_para_o_cliente(loja, com_carrinho, pedido_id):
+    r = loja.patch(f"{ADMIN}/{pedido_id}", json={"endereco_entrega": "Avenida Central, 900"})
+
+    assert r.status_code == 200
+    detalhe = com_carrinho.get(f"{BASE}/pedidos/{pedido_id}").json()
+    assert detalhe["endereco_entrega"] == "Avenida Central, 900"
+
+
+def test_edicao_ignora_campos_que_nao_sao_o_endereco(loja, pedido_id):
+    """Mandar `total` ou `status` no corpo nao altera nada."""
+    r = loja.patch(
+        f"{ADMIN}/{pedido_id}",
+        json={"endereco_entrega": "Avenida Central, 900", "total": "0.01", "status": "entregue"},
+    )
+    assert r.json()["total"] == "17.00"
+    assert r.json()["status"] == "recebido"
+
+
+def test_rn11_endereco_travado_depois_de_sair_devolve_409(loja, pedido_id):
+    loja.post(f"{ADMIN}/{pedido_id}/avancar")
+    loja.post(f"{ADMIN}/{pedido_id}/avancar")  # saiu_para_entrega
+
+    r = loja.patch(f"{ADMIN}/{pedido_id}", json={"endereco_entrega": "Avenida Central, 900"})
+    assert r.status_code == 409
+    assert r.json()["codigo"] == "pedido_nao_editavel"
+
+
+def test_rn13_excluir_pedido_em_andamento_devolve_409(loja, pedido_id):
+    r = loja.delete(f"{ADMIN}/{pedido_id}")
+    assert r.status_code == 409
+    assert r.json()["codigo"] == "pedido_nao_excluivel"
+
+
+def test_exclusao_logica_esconde_de_todos_mas_preserva_no_banco(
+    loja, com_carrinho, pedido_id, session_factory
+):
+    loja.post(f"{ADMIN}/{pedido_id}/cancelar")
+    assert loja.delete(f"{ADMIN}/{pedido_id}").status_code == 204
+
+    # Sumiu para a loja e para o cliente...
+    assert loja.get(ADMIN).json() == []
+    assert com_carrinho.get(f"{BASE}/pedidos").json() == []
+    assert com_carrinho.get(f"{BASE}/pedidos/{pedido_id}").status_code == 404
+
+    # ...mas a venda continua registrada no banco.
+    with session_factory() as s:
+        linha = s.get(PedidoORM, UUID(pedido_id))
+        assert linha is not None
+        assert linha.excluido_em is not None
+
+    # Excluir de novo: o recurso ja nao existe para a API.
+    assert loja.delete(f"{ADMIN}/{pedido_id}").status_code == 404
+
+
+def test_filtro_por_status(loja, pedido_id):
+    assert loja.get(ADMIN, params={"status": "em_preparo"}).json() == []
+    assert len(loja.get(ADMIN, params={"status": "recebido"}).json()) == 1
+
+
+def test_filtro_com_status_inexistente_devolve_422(loja):
+    assert loja.get(ADMIN, params={"status": "voando"}).status_code == 422
+
+
+def test_pedido_inexistente_devolve_404_para_a_loja(loja):
+    r = loja.post(f"{ADMIN}/{uuid4()}/avancar")
+    assert r.status_code == 404
+    assert r.json()["codigo"] == "pedido_nao_encontrado"

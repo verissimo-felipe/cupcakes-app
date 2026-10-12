@@ -1,4 +1,9 @@
-"""Rotas de pedido. Historias ID 07 (checkout) e ID 08 (rastreamento)."""
+"""Rotas de pedido DO CLIENTE. Historias ID 07 (checkout) e ID 08 (rastreamento).
+
+Tudo aqui opera sobre os pedidos de QUEM ESTA LOGADO. As operacoes da
+loja ficam em `gestao_pedidos.py`, sob `/admin/pedidos` - prefixo
+separado para que nenhuma rota de cliente precise de "excecao para admin".
+"""
 
 from __future__ import annotations
 
@@ -6,10 +11,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import AdminDep, PedidoServiceDep, UsuarioDep
+from app.api.deps import PedidoServiceDep, UsuarioDep
 from app.api.v1.schemas import (
     CheckoutRequest,
-    MudarStatusRequest,
     PedidoResponse,
     PedidoResumoResponse,
 )
@@ -50,18 +54,3 @@ def detalhar(pedido_id: UUID, usuario: UsuarioDep, servico: PedidoServiceDep):
     que o id existe.
     """
     return PedidoResponse.de_dominio(servico.detalhar(pedido_id, usuario.id))
-
-
-@router.patch("/{pedido_id}/status", response_model=PedidoResponse)
-def mudar_status(pedido_id: UUID, payload: MudarStatusRequest, _: AdminDep, servico: PedidoServiceDep):
-    """Historia ID 08 / RF-15 - operacao da loja, nao do cliente.
-
-    `AdminDep` no parametro descartado (`_`) e o guarda: o FastAPI resolve
-    a dependencia antes de entrar na funcao, entao um usuario comum leva
-    403 sem que uma linha daqui rode.
-
-    Transicao invalida sobe `TransicaoStatusInvalidaError` -> 409 (RN-05).
-    A FSM que decide o que e valido esta no dominio; esta rota nem sabe
-    quais transicoes existem.
-    """
-    return PedidoResponse.de_dominio(servico.avancar_status(pedido_id, payload.status))

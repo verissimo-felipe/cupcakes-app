@@ -19,8 +19,11 @@ from app.domain.errors import (
     DomainError,
     EmailInvalidoError,
     EmailJaCadastradoError,
+    EnderecoInvalidoError,
     ItemNaoEncontradoError,
+    PedidoNaoEditavelError,
     PedidoNaoEncontradoError,
+    PedidoNaoExcluivelError,
     QuantidadeInvalidaError,
     SenhaFracaError,
     SenhaMuitoLongaError,
@@ -73,6 +76,9 @@ _STATUS_POR_ERRO: dict[type[DomainError], int] = {
     CredenciaisInvalidasError: 401,
     CupcakeNaoEncontradoError: 404,
     PedidoNaoEncontradoError: 404,
+    EnderecoInvalidoError: 422,
+    PedidoNaoEditavelError: 409,
+    PedidoNaoExcluivelError: 409,
 }
 
 

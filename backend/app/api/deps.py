@@ -33,6 +33,7 @@ from app.infra.repositories import (
 )
 from app.services.autenticacao import AutenticacaoService
 from app.services.catalogo import CarrinhoService, CatalogoService
+from app.services.gestao_pedidos import GestaoPedidosService
 from app.services.pedido import PedidoService
 
 NOME_COOKIE = "acesso"
@@ -61,10 +62,15 @@ def get_pedido_service(session: SessionDep) -> PedidoService:
     return PedidoService(PedidoRepositorySQL(session), CarrinhoRepositorySQL(session))
 
 
+def get_gestao_pedidos_service(session: SessionDep) -> GestaoPedidosService:
+    return GestaoPedidosService(PedidoRepositorySQL(session), UsuarioRepositorySQL(session))
+
+
 AuthServiceDep = Annotated[AutenticacaoService, Depends(get_auth_service)]
 CatalogoServiceDep = Annotated[CatalogoService, Depends(get_catalogo_service)]
 CarrinhoServiceDep = Annotated[CarrinhoService, Depends(get_carrinho_service)]
 PedidoServiceDep = Annotated[PedidoService, Depends(get_pedido_service)]
+GestaoPedidosServiceDep = Annotated[GestaoPedidosService, Depends(get_gestao_pedidos_service)]
 
 
 # ---------------------------------------------------------------------

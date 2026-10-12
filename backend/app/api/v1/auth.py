@@ -17,6 +17,18 @@ from app.core.security import criar_access_token
 router = APIRouter(prefix="/auth", tags=["autenticacao"])
 
 
+def _e_admin(email: str) -> bool:
+    """Mesma regra de `deps.usuario_admin`, so que para INFORMAR o front.
+
+    A duplicacao e consciente e limitada: aqui o resultado vira um campo
+    de resposta; la ele barra a requisicao. Se um dia virar RBAC
+    (Role-Based Access Control) com papel no banco, as duas passam a ler
+    a mesma coluna e esta funcao some.
+    """
+    alvos = {e.strip().lower() for e in get_settings().ADMIN_EMAILS}
+    return email in alvos
+
+
 def _gravar_cookie(response: Response, usuario_id: str) -> None:
     """Emite o JWT e grava no cookie de sessao.
 
@@ -68,7 +80,7 @@ def registrar(payload: RegistroRequest, response: Response, servico: AuthService
     """
     usuario = servico.cadastrar(payload.nome, payload.email, payload.senha)
     _gravar_cookie(response, str(usuario.id))
-    return UsuarioResponse.de_dominio(usuario)
+    return UsuarioResponse.de_dominio(usuario, admin=_e_admin(usuario.email))
 
 
 @router.post("/login", response_model=UsuarioResponse)
@@ -80,7 +92,7 @@ def login(payload: LoginRequest, response: Response, servico: AuthServiceDep):
     """
     usuario = servico.autenticar(payload.email, payload.senha)
     _gravar_cookie(response, str(usuario.id))
-    return UsuarioResponse.de_dominio(usuario)
+    return UsuarioResponse.de_dominio(usuario, admin=_e_admin(usuario.email))
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -107,4 +119,4 @@ def eu(usuario: UsuarioDep):
     de login ou a sessao ativa - ele nao consegue ler o cookie httpOnly
     para descobrir sozinho.
     """
-    return UsuarioResponse.de_dominio(usuario)
+    return UsuarioResponse.de_dominio(usuario, admin=_e_admin(usuario.email))

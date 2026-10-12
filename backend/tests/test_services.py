@@ -31,6 +31,7 @@ from app.domain.errors import (
 from app.domain.usuario import Usuario
 from app.services.autenticacao import AutenticacaoService
 from app.services.catalogo import CarrinhoService, CatalogoService
+from app.services.gestao_pedidos import GestaoPedidosService
 from app.services.pedido import PedidoService
 
 # ---------------------------------------------------------------------
@@ -47,6 +48,9 @@ class UsuariosFake:
 
     def buscar_por_email(self, email):
         return next((u for u in self.dados.values() if u.email == email), None)
+
+    def buscar_por_ids(self, ids):
+        return {i: self.dados[i] for i in ids if i in self.dados}
 
     def salvar(self, usuario):
         self.dados[usuario.id] = usuario
@@ -87,17 +91,27 @@ class CarrinhosFake:
 
 
 class PedidosFake:
+    """Respeita o mesmo contrato de exclusao logica do repositorio real:
+    leitura nunca devolve pedido com `excluido_em` preenchido."""
+
     def __init__(self) -> None:
         self.dados: dict[UUID, Pedido] = {}
 
     def salvar(self, pedido):
         self.dados[pedido.id] = pedido
 
+    def _ativos(self):
+        return [p for p in self.dados.values() if p.excluido_em is None]
+
     def buscar_por_id(self, pedido_id):
-        return self.dados.get(pedido_id)
+        pedido = self.dados.get(pedido_id)
+        return pedido if pedido and pedido.excluido_em is None else None
 
     def listar_por_usuario(self, usuario_id):
-        return [p for p in self.dados.values() if p.usuario_id == usuario_id]
+        return [p for p in self._ativos() if p.usuario_id == usuario_id]
+
+    def listar_todos(self, status=None):
+        return [p for p in self._ativos() if status is None or p.status is status]
 
 
 # ---------------------------------------------------------------------
@@ -298,14 +312,86 @@ def test_listagem_isola_por_usuario(com_carrinho_cheio, usuario_id):
     assert servico.listar_do_usuario(uuid4()) == []
 
 
-def test_rn05_avanco_de_status_respeita_a_fsm(com_carrinho_cheio, usuario_id):
-    servico, _, _ = com_carrinho_cheio
-    pedido = servico.finalizar(usuario_id, "Rua das Flores, 123")
+# ---------------------------------------------------------------------
+# Gestao pela loja - extensao da historia ID 08 / RF-15
+# ---------------------------------------------------------------------
 
-    servico.avancar_status(pedido.id, StatusPedido.EM_PREPARO)
+
+@pytest.fixture
+def loja(cupcakes):
+    """Cenario: dois clientes, um pedido cada, e o servico da loja."""
+    usuarios = UsuariosFake()
+    carrinhos = CarrinhosFake()
+    pedidos = PedidosFake()
+
+    ana = Usuario(uuid4(), "Ana", "ana@mail.com", "hash")
+    bruno = Usuario(uuid4(), "Bruno", "bruno@mail.com", "hash")
+    for u in (ana, bruno):
+        usuarios.salvar(u)
+        CarrinhoService(carrinhos, cupcakes).adicionar_item(u.id, BAUNILHA.id, 1)
+        PedidoService(pedidos, carrinhos).finalizar(u.id, "Rua das Flores, 123")
+
+    return GestaoPedidosService(pedidos, usuarios), pedidos
+
+
+def test_loja_enxerga_pedidos_de_todos_com_nome_do_cliente(loja):
+    servico, _ = loja
+    lista = servico.listar()
+
+    assert {item.cliente_nome for item in lista} == {"Ana", "Bruno"}
+
+
+def test_loja_filtra_por_status(loja):
+    servico, pedidos = loja
+    alvo = next(iter(pedidos.dados))
+    servico.avancar(alvo)
+
+    em_preparo = servico.listar(StatusPedido.EM_PREPARO)
+    assert [i.pedido.id for i in em_preparo] == [alvo]
+
+
+def test_rn05_avancar_respeita_a_fsm(loja):
+    servico, pedidos = loja
+    alvo = next(iter(pedidos.dados))
+    for _ in range(3):
+        servico.avancar(alvo)  # -> entregue
 
     with pytest.raises(TransicaoStatusInvalidaError):
-        servico.avancar_status(pedido.id, StatusPedido.ENTREGUE)
+        servico.avancar(alvo)
+    with pytest.raises(TransicaoStatusInvalidaError):
+        servico.cancelar(alvo)
+
+
+def test_alterar_endereco_persiste_no_repositorio(loja):
+    servico, pedidos = loja
+    alvo = next(iter(pedidos.dados))
+
+    servico.alterar_endereco(alvo, "Avenida Central, 900")
+
+    assert pedidos.dados[alvo].endereco_entrega == "Avenida Central, 900"
+
+
+def test_pedido_excluido_some_para_a_loja(loja):
+    servico, pedidos = loja
+    alvo = next(iter(pedidos.dados))
+    servico.cancelar(alvo)
+    servico.excluir(alvo)
+
+    assert len(servico.listar()) == 1
+    with pytest.raises(PedidoNaoEncontradoError):
+        servico.detalhar(alvo)
+    # Mas o objeto continua guardado - so marcado.
+    assert pedidos.dados[alvo].excluido_em is not None
+
+
+def test_cliente_removido_nao_derruba_a_listagem(loja):
+    """Pedido cujo cliente sumiu aparece com marcador, nao com erro 500."""
+    servico, pedidos = loja
+    alvo = next(iter(pedidos.dados.values()))
+    alvo.usuario_id = uuid4()  # dono inexistente
+
+    nomes = {i.cliente_nome for i in servico.listar()}
+    assert "(conta removida)" in nomes
 
 
 # ---------------------------------------------------------------------

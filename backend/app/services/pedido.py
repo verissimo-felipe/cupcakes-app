@@ -1,4 +1,4 @@
-"""Casos de uso de pedido. Historias ID 07 (checkout) e ID 08 (rastreamento).
+"""Casos de uso de pedido DO CLIENTE. Historias ID 07 (checkout) e ID 08.
 
 Este e o servico que MAIS justifica a existencia da camada, porque o
 checkout toca DOIS agregados: cria o pedido e esvazia o carrinho.
@@ -6,13 +6,16 @@ checkout toca DOIS agregados: cria o pedido e esvazia o carrinho.
 Nenhuma entidade de dominio pode fazer isso sozinha. `Carrinho` nao
 conhece `Pedido`, e nao deve conhecer - sao ciclos de vida diferentes.
 Coordenar os dois e responsabilidade de caso de uso, nao de regra.
+
+As operacoes da LOJA (avancar etapa, cancelar, corrigir endereco,
+excluir) moram em `gestao_pedidos.py` - ver o docstring de la sobre SRP.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from app.domain.entities import Pedido, StatusPedido
+from app.domain.entities import Pedido
 from app.domain.errors import PedidoNaoEncontradoError
 from app.domain.repositories import CarrinhoRepository, PedidoRepository
 
@@ -37,8 +40,9 @@ class PedidoService:
         """
         carrinho = self._carrinhos.obter_ou_criar(usuario_id)
 
-        # RN-04 (carrinho vazio) e aplicada aqui dentro, no dominio.
-        pedido = Pedido.a_partir_do_carrinho(carrinho, endereco_entrega.strip())
+        # RN-04 (carrinho vazio) e RN-12 (endereco util) sao aplicadas
+        # aqui dentro, no dominio.
+        pedido = Pedido.a_partir_do_carrinho(carrinho, endereco_entrega)
 
         self._pedidos.salvar(pedido)
         self._carrinhos.limpar(usuario_id)
@@ -75,23 +79,4 @@ class PedidoService:
         pedido = self._pedidos.buscar_por_id(pedido_id)
         if pedido is None or pedido.usuario_id != usuario_id:
             raise PedidoNaoEncontradoError(str(pedido_id))
-        return pedido
-
-    def avancar_status(self, pedido_id: UUID, novo_status: StatusPedido) -> Pedido:
-        """Historia ID 08 / RF-15 - operacao administrativa.
-
-        Sem `usuario_id`: quem avanca o status e a loja, nao o cliente.
-        A restricao de quem pode chamar isto e feita na camada de API,
-        por perfil de acesso.
-
-        A validacao da transicao NAO esta aqui - esta na FSM do dominio,
-        em `Pedido.mudar_status()`. Este metodo nem sabe quais transicoes
-        existem.
-        """
-        pedido = self._pedidos.buscar_por_id(pedido_id)
-        if pedido is None:
-            raise PedidoNaoEncontradoError(str(pedido_id))
-
-        pedido.mudar_status(novo_status)  # RN-05
-        self._pedidos.salvar(pedido)
         return pedido

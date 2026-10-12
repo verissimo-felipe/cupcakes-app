@@ -20,6 +20,7 @@ caminho exato do campo invalido.
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.domain.entities import Carrinho, Cupcake, ItemCarrinho, Pedido, StatusPedido
 from app.domain.usuario import Usuario
+from app.services.gestao_pedidos import PedidoComCliente
 
 # ---------------------------------------------------------------------
 # Entrada
@@ -64,8 +66,15 @@ class CheckoutRequest(BaseModel):
     endereco_entrega: str = Field(min_length=5, max_length=300)
 
 
-class MudarStatusRequest(BaseModel):
-    status: StatusPedido
+class AlterarEnderecoRequest(BaseModel):
+    """Unico campo editavel pela loja - ver `Pedido.alterar_endereco`.
+
+    O modelo NAO aceita `itens`, `total` nem `status`. Um payload com
+    `{"total": "0.01"}` e ignorado pelo Pydantic: o campo nao existe aqui,
+    entao nao chega ao servico. Proteger por ausencia, de novo.
+    """
+
+    endereco_entrega: str = Field(min_length=5, max_length=300)
 
 
 # ---------------------------------------------------------------------
@@ -74,17 +83,33 @@ class MudarStatusRequest(BaseModel):
 
 
 class UsuarioResponse(BaseModel):
-    """SEM `senha_hash`. A ausencia do campo e a protecao."""
+    """SEM `senha_hash`. A ausencia do campo e a protecao.
+
+    `admin` existe para a INTERFACE decidir o que desenhar - esconder o
+    painel da loja de quem nao e da loja. NAO e controle de acesso:
+    a autorizacao de verdade esta em `deps.usuario_admin`, no servidor.
+
+    A distincao importa. Se o front fosse a unica barreira, bastaria
+    abrir o DevTools e trocar `admin` para `true` no estado do React
+    para liberar o botao - e a requisicao passaria. Como o servidor
+    revalida, o botao liberado leva 403 do mesmo jeito.
+
+    Regra geral: esconder elemento e experiencia do usuario; negar
+    requisicao e seguranca. Nunca confunda os dois.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     nome: str
     email: str
+    admin: bool = False
 
     @classmethod
-    def de_dominio(cls, usuario: Usuario) -> "UsuarioResponse":
-        return cls(id=usuario.id, nome=usuario.nome, email=usuario.email)
+    def de_dominio(cls, usuario: Usuario, admin: bool = False) -> "UsuarioResponse":
+        return cls(
+            id=usuario.id, nome=usuario.nome, email=usuario.email, admin=admin
+        )
 
 
 class CupcakeResponse(BaseModel):
@@ -177,6 +202,93 @@ class PedidoResumoResponse(BaseModel):
             total=pedido.total,
             status=pedido.status,
             quantidade_itens=sum(i.quantidade for i in pedido.itens),
+        )
+
+
+# ---------------------------------------------------------------------
+# Saida - visao da LOJA (rotas /admin/pedidos)
+# ---------------------------------------------------------------------
+
+
+class ClienteResumo(BaseModel):
+    """Quem comprou. So nome e e-mail.
+
+    Minimizacao de dados - principio da NECESSIDADE da LGPD (Lei Geral de
+    Protecao de Dados, art. 6o, III): a loja precisa saber para quem
+    entregar e como avisar de um problema. Nao precisa de id interno do
+    usuario, data de cadastro nem nada alem disso.
+    """
+
+    nome: str
+    email: str
+
+
+class AcoesPedido(BaseModel):
+    """O que a loja pode fazer com o pedido AGORA. Calculado pelo dominio.
+
+    O front so le estes campos para decidir quais botoes desenhar. Ele
+    nao conhece a FSM, nao sabe que endereco trava depois de sair para
+    entrega, nem que so pedido finalizado e excluivel. Se a regra mudar
+    no dominio, a tela muda junto sem uma linha de TypeScript.
+
+    E a ideia central de HATEOAS (Hypermedia As The Engine Of Application
+    State) numa versao enxuta: a resposta diz o que e possivel fazer em
+    seguida, em vez de o cliente deduzir.
+    """
+
+    proximo_status: StatusPedido | None
+    pode_cancelar: bool
+    pode_editar_endereco: bool
+    pode_excluir: bool
+
+    @classmethod
+    def de_dominio(cls, pedido: Pedido) -> "AcoesPedido":
+        return cls(
+            proximo_status=pedido.proximo_status,
+            pode_cancelar=pedido.pode_cancelar,
+            pode_editar_endereco=pedido.pode_editar_endereco,
+            pode_excluir=pedido.pode_excluir,
+        )
+
+
+class PedidoGestaoResumoResponse(BaseModel):
+    """Linha da lista da loja. Sem itens - mesmo motivo de `PedidoResumoResponse`."""
+
+    id: UUID
+    criado_em: datetime | None
+    cliente: ClienteResumo
+    total: Decimal
+    status: StatusPedido
+    quantidade_itens: int
+    acoes: AcoesPedido
+
+    @classmethod
+    def de_dominio(cls, dado: PedidoComCliente) -> "PedidoGestaoResumoResponse":
+        p = dado.pedido
+        return cls(
+            id=p.id,
+            criado_em=p.criado_em,
+            cliente=ClienteResumo(nome=dado.cliente_nome, email=dado.cliente_email),
+            total=p.total,
+            status=p.status,
+            quantidade_itens=sum(i.quantidade for i in p.itens),
+            acoes=AcoesPedido.de_dominio(p),
+        )
+
+
+class PedidoGestaoResponse(PedidoGestaoResumoResponse):
+    """Detalhe para a loja: o resumo + itens e endereco."""
+
+    itens: list[ItemResponse]
+    endereco_entrega: str
+
+    @classmethod
+    def de_dominio(cls, dado: PedidoComCliente) -> "PedidoGestaoResponse":
+        resumo = PedidoGestaoResumoResponse.de_dominio(dado)
+        return cls(
+            **resumo.model_dump(),
+            itens=[ItemResponse.de_dominio(i) for i in dado.pedido.itens],
+            endereco_entrega=dado.pedido.endereco_entrega,
         )
 
 

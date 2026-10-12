@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
 
     # Sem sistema de perfis (ver `deps.usuario_admin`). Lista de e-mails
-    # autorizados a mudar status de pedido.
+    # autorizados a usar a gestao da loja (rotas /api/v1/admin/...).
     ADMIN_EMAILS: list[str] = []
 
 
