@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Alerta } from "@/componentes/Alerta";
 import { useSessao } from "@/componentes/SessaoProvider";
 import { ErroApi } from "@/lib/api";
+import { caminhoSeguro } from "@/lib/navegacao";
 
 /** Historia ID 02 / RF-03. */
 function Formulario() {
@@ -17,7 +18,8 @@ function Formulario() {
   const { entrar } = useSessao();
   const router = useRouter();
   const params = useSearchParams();
-  const voltar = params.get("voltar") ?? "/";
+  // Nunca redirecionar para fora do site - ver lib/navegacao.ts.
+  const voltar = caminhoSeguro(params.get("voltar"));
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
