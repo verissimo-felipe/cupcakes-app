@@ -15,16 +15,20 @@ export function Cabecalho() {
 
   return (
     <header>
-      <div className="flex items-center justify-between gap-4 bg-ameixa px-6 py-4">
+      {/* `flex-wrap` no contêiner: quando os links nao cabem ao lado da
+          marca (celular + conta da loja), o menu inteiro desce para uma
+          segunda linha - em vez de a marca quebrar em "Doce / Forma" e o
+          "Sair" ficar sozinho embaixo. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-ameixa px-6 py-4">
         <Link
           href="/"
-          className="font-display text-media text-papel"
+          className="whitespace-nowrap font-display text-media text-papel"
           style={{ fontVariationSettings: "'SOFT' 60, 'WONK' 1" }}
         >
           Doce Forma
         </Link>
 
-        <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-minuscula text-papel">
+        <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-minuscula text-papel">
           <Link href="/carrinho" className="hover:text-buttercream">
             Carrinho
             {quantidadeCarrinho > 0 && (
@@ -61,7 +65,10 @@ export function Cabecalho() {
                   interface; quem digitar /loja/pedidos sem ser admin ve o
                   aviso de area restrita, e a API responde 403. */}
               {usuario.admin && (
-                <Link href="/loja/pedidos" className="text-buttercream hover:underline">
+                <Link
+                  href="/loja/pedidos"
+                  className="text-buttercream hover:underline"
+                >
                   Gestão
                 </Link>
               )}

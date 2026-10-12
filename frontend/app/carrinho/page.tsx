@@ -87,7 +87,9 @@ export default function PaginaCarrinho() {
   }
 
   if (carregandoSessao || carregando) {
-    return <p className="px-6 py-20 text-center text-tinta-suave">Carregando…</p>;
+    return (
+      <p className="px-6 py-20 text-center text-tinta-suave">Carregando…</p>
+    );
   }
 
   if (!usuario) return null;
@@ -172,25 +174,32 @@ export default function PaginaCarrinho() {
                     </button>
                   </div>
 
-                  <p className="w-24 text-right font-display text-media tabular-nums">
-                    {formatarPreco(item.subtotal)}
-                  </p>
+                  {/* Subtotal e "Remover" andam juntos. No celular eles
+                      descem para uma linha propria, de ponta a ponta -
+                      sem isso o valor ficava solto, recuado no meio. */}
+                  <div className="flex items-center gap-4 max-sm:w-full max-sm:justify-between">
+                    <p className="font-display text-media tabular-nums sm:w-24 sm:text-right">
+                      {formatarPreco(item.subtotal)}
+                    </p>
 
-                  {/* Remover tem botao proprio, separado do "−". Chegar a
-                      zero diminuindo seria ambiguo: o back-end trata
-                      quantidade 0 como entrada invalida (RN-01), nao como
-                      remocao. A separacao tambem evita exclusao
-                      acidental de quem so queria ajustar. */}
-                  <button
-                    aria-label={`Remover ${item.nome}`}
-                    disabled={travado}
-                    onClick={() =>
-                      mutar(item.cupcake_id, () => api.remover(item.cupcake_id))
-                    }
-                    className="text-minuscula text-tinta-suave underline hover:text-framboesa disabled:opacity-40"
-                  >
-                    Remover
-                  </button>
+                    {/* Remover tem botao proprio, separado do "−". Chegar a
+                        zero diminuindo seria ambiguo: o back-end trata
+                        quantidade 0 como entrada invalida (RN-01), nao como
+                        remocao. A separacao tambem evita exclusao
+                        acidental de quem so queria ajustar. */}
+                    <button
+                      aria-label={`Remover ${item.nome}`}
+                      disabled={travado}
+                      onClick={() =>
+                        mutar(item.cupcake_id, () =>
+                          api.remover(item.cupcake_id),
+                        )
+                      }
+                      className="text-minuscula text-tinta-suave underline hover:text-framboesa disabled:opacity-40"
+                    >
+                      Remover
+                    </button>
+                  </div>
                 </li>
               );
             })}
