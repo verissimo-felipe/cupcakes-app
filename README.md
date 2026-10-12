@@ -131,3 +131,7 @@ completo de 5 sprints.
 | [`docs/rastreabilidade.md`](docs/rastreabilidade.md) | História → RF → RN → Código; decisões e correções do backlog |
 | [`docs/manual-do-usuario.md`](docs/manual-do-usuario.md) | Manual de uso |
 | [`docs/RECAP.md`](docs/RECAP.md) | Reconstituição do desenvolvimento |
+
+
+## Créditos
+Fotos do catálogo: [Unsplash](https://unsplash.com) / [Pexels](https://pexels.com), licença livre.
