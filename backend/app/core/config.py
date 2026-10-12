@@ -2,7 +2,14 @@
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Prefixos que provedores de Postgres (Neon, Render, Heroku) entregam.
+# Sem o "+psycopg", o SQLAlchemy tenta o driver psycopg2 - que nao esta
+# instalado - e a aplicacao morre no boot com ModuleNotFoundError.
+_PREFIXOS_SEM_DRIVER = ("postgres://", "postgresql://")
+_PREFIXO_COM_DRIVER = "postgresql+psycopg://"
 
 
 class Settings(BaseSettings):
@@ -28,6 +35,21 @@ class Settings(BaseSettings):
     # Sem sistema de perfis (ver `deps.usuario_admin`). Lista de e-mails
     # autorizados a usar a gestao da loja (rotas /api/v1/admin/...).
     ADMIN_EMAILS: list[str] = []
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _usar_driver_psycopg(cls, url: str) -> str:
+        """Aceita a URL exatamente como o provedor entrega.
+
+        O painel do Neon copia `postgresql://...`; o Render e o Heroku
+        antigos usam `postgres://`. Os dois viram `postgresql+psycopg://`,
+        o driver instalado no projeto. Corrigir aqui evita um erro de
+        deploy que so aparece no log do servidor.
+        """
+        for prefixo in _PREFIXOS_SEM_DRIVER:
+            if url.startswith(prefixo):
+                return _PREFIXO_COM_DRIVER + url[len(prefixo):]
+        return url
 
 
 @lru_cache
