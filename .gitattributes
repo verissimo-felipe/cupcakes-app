@@ -1,0 +1,32 @@
+# Normalizacao de fim de linha.
+#
+# Sem este arquivo, o comportamento depende do `core.autocrlf` de cada
+# maquina - o que significa que o mesmo repositorio se comporta diferente
+# no Windows, no Linux e no CI. Aqui a regra fica no repositorio, nao na
+# configuracao local.
+#
+# LF   = Line Feed (\n)          - Unix, Linux, macOS
+# CRLF = Carriage Return + LF    - Windows
+
+# Padrao: o Git detecta arquivos de texto e grava LF no repositorio E na
+# copia de trabalho. Editores modernos no Windows lidam com LF sem
+# problema, e o back-end roda em container Linux - script com CRLF falha
+# la com "\r: command not found".
+* text=auto eol=lf
+
+# Excecoes: estes SO funcionam com CRLF no Windows.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binarios - nunca converter, sob pena de corromper o arquivo.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+*.zip binary
